@@ -1,35 +1,26 @@
 # models.py
 #
-# GNN models for node-level regression on the APS Citation Network.
-# Task: predict future citation counts for each paper.
+# GNN encoder models and edge predictor for link prediction
+# in an undirected collaboration network.
 
 import torch
 from torch import nn
 from torch_geometric.nn import GCNConv, SAGEConv
 
 
-class GCNRegressor(nn.Module):
+class GCNEncoder(nn.Module):
     """
-    Graph Convolutional Network (GCN) for node-level regression.
-
-    Input:
-        - x: node features [num_nodes, in_channels]
-        - edge_index: graph edges [2, num_edges]
-
-    Output:
-        - y_pred: predicted value for each node [num_nodes]
+    Simple 2-layer GCN encoder.
     """
 
-    def __init__(self, in_channels: int, hidden_channels: int = 64, dropout: float = 0.2):
+    def __init__(self, in_channels: int, hidden_channels: int = 64,
+                 out_channels: int = 64, dropout: float = 0.2):
         super().__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channels)
         self.dropout = nn.Dropout(dropout)
-        self.lin = nn.Linear(hidden_channels, 1)
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-
+    def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         x = torch.relu(x)
         x = self.dropout(x)
@@ -37,29 +28,22 @@ class GCNRegressor(nn.Module):
         x = self.conv2(x, edge_index)
         x = torch.relu(x)
         x = self.dropout(x)
-
-        out = self.lin(x).squeeze(-1)  # [num_nodes]
-        return out
+        return x  # [num_nodes, out_channels]
 
 
-class GraphSAGERegressor(nn.Module):
+class GraphSAGEEncoder(nn.Module):
     """
-    GraphSAGE model for node-level regression.
-
-    This model is often more scalable and robust for large graphs
-    compared to vanilla GCN.
+    Simple 2-layer GraphSAGE encoder.
     """
 
-    def __init__(self, in_channels: int, hidden_channels: int = 64, dropout: float = 0.2):
+    def __init__(self, in_channels: int, hidden_channels: int = 64,
+                 out_channels: int = 64, dropout: float = 0.2):
         super().__init__()
         self.conv1 = SAGEConv(in_channels, hidden_channels)
-        self.conv2 = SAGEConv(hidden_channels, hidden_channels)
+        self.conv2 = SAGEConv(hidden_channels, out_channels)
         self.dropout = nn.Dropout(dropout)
-        self.lin = nn.Linear(hidden_channels, 1)
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-
+    def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         x = torch.relu(x)
         x = self.dropout(x)
@@ -67,38 +51,54 @@ class GraphSAGERegressor(nn.Module):
         x = self.conv2(x, edge_index)
         x = torch.relu(x)
         x = self.dropout(x)
-
-        out = self.lin(x).squeeze(-1)
-        return out
+        return x
 
 
-def get_model(
-    name: str,
-    in_channels: int,
-    hidden_channels: int = 64,
-    dropout: float = 0.2,
-) -> nn.Module:
+class LinkPredictor(nn.Module):
     """
-    Helper to create a model by name.
+    MLP-based edge predictor.
+    Input: embeddings of node u and node v.
+    Output: logit (before sigmoid) for edge existence.
+    """
 
-    Args:
-        name: "gcn" or "sage"
-        in_channels: number of input features per node
-        hidden_channels: hidden layer size
-        dropout: dropout probability
+    def __init__(self, emb_dim: int, hidden_dim: int = 64):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(2 * emb_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
 
-    Returns:
-        Torch nn.Module instance.
+    def forward(self, z_u, z_v):
+        # z_u, z_v: [batch_size, emb_dim]
+        x = torch.cat([z_u, z_v], dim=-1)
+        logits = self.mlp(x).squeeze(-1)  # [batch_size]
+        return logits
+
+
+def get_encoder(name: str,
+                in_channels: int,
+                hidden_channels: int = 64,
+                out_channels: int = 64,
+                dropout: float = 0.2) -> nn.Module:
+    """
+    Helper to create a GNN encoder by name.
+    name: "gcn" or "sage"
     """
     name = name.lower()
     if name == "gcn":
-        return GCNRegressor(in_channels=in_channels,
-                            hidden_channels=hidden_channels,
-                            dropout=dropout)
+        return GCNEncoder(
+            in_channels=in_channels,
+            hidden_channels=hidden_channels,
+            out_channels=out_channels,
+            dropout=dropout,
+        )
     elif name == "sage" or name == "graphsage":
-        return GraphSAGERegressor(in_channels=in_channels,
-                                  hidden_channels=hidden_channels,
-                                  dropout=dropout)
+        return GraphSAGEEncoder(
+            in_channels=in_channels,
+            hidden_channels=hidden_channels,
+            out_channels=out_channels,
+            dropout=dropout,
+        )
     else:
-        raise ValueError(f"Unknown model name: {name}. Use 'gcn' or 'sage'.")
-
+        raise ValueError(f"Unknown encoder name: {name}. Use 'gcn' or 'sage'.")
