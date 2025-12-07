@@ -23,14 +23,13 @@ RUN apt-get update && \
 # 4) Definir diretório de trabalho dentro do container
 WORKDIR /workspace
 
-# 5) Copiar apenas requirements primeiro (melhora cache do Docker)
-COPY requirements.txt ./requirements.txt
+# 5) Copiar apenas arquivos de dependência primeiro (melhora o cache)
+COPY requirements.txt constraints.txt ./
 
-# 6) Atualizar pip e instalar dependências Python
-#    Incluo jupyter e networkx caso não estejam no requirements.txt
+# 6) Atualizar pip e instalar dependências Python usando constraints.txt
+#    Isso garante que as versões sigam o que você definiu cientificamente.
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    pip install jupyter networkx
+    pip install -r requirements.txt -c constraints.txt
 
 # 7) Copiar o restante do projeto
 COPY . .
@@ -43,5 +42,4 @@ EXPOSE 8888
 
 # 10) Comando padrão:
 #     - Sobe um Jupyter Lab apontando para /workspace
-#     - Você pode sobrescrever esse CMD para rodar o treino, se quiser
 CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.token=", "--notebook-dir=/workspace"]
