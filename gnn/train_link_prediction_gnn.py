@@ -5,14 +5,13 @@
 #
 # Expected input file:
 #   ../data/collaboration.edgelist.txt
-# Format (no header, tab-separated, two integer columns):
-#   u<tab>v
-#   0   1680
-#   0   6918
+# Format (no header, whitespace-separated, two integer columns):
+#   u  v
+#   0  1680
+#   0  6918
 #   ...
 
 import os
-import math
 import numpy as np
 import pandas as pd
 import torch
@@ -22,8 +21,13 @@ from torch_geometric.utils import negative_sampling
 from sklearn.metrics import roc_auc_score, average_precision_score
 
 from models import get_encoder, LinkPredictor
-from utils import set_seed, print_graph_summary, save_metrics
-
+from utils import (
+    set_seed,
+    print_graph_summary,
+    save_metrics,
+    plot_degree_distribution,
+    ensure_dir,
+)
 
 # =============================================================================
 # CONFIG
@@ -31,6 +35,11 @@ from utils import set_seed, print_graph_summary, save_metrics
 
 DATA_DIR = "../data"
 EDGE_LIST_FILE = os.path.join(DATA_DIR, "collaboration.edgelist.txt")
+
+RESULTS_DIR = "../results"
+METRICS_FILE = os.path.join(RESULTS_DIR, "linkpred_metrics.json")
+MODEL_FILE = os.path.join(RESULTS_DIR, "linkpred_gnn_best.pth")
+DEGREE_PLOT_FILE = os.path.join(RESULTS_DIR, "degree_distribution.png")
 
 ENCODER_NAME = "gcn"       # "gcn" or "sage"
 EMB_DIM = 64
@@ -47,10 +56,10 @@ VAL_RATIO = 0.1  # test = 1 - train - val
 
 
 # =============================================================================
-# UTILS (LOCAL)
+# LOCAL UTILS
 # =============================================================================
 
-def load_edge_list(path: str):
+def load_edge_list(path: str) -> pd.DataFrame:
     """
     Load undirected collaboration network from a simple edge list
     file with no header and two integer columns (u, v).
@@ -58,7 +67,7 @@ def load_edge_list(path: str):
     df = pd.read_csv(path, sep=r"\s+", header=None, names=["u", "v"])
     df = df[df["u"] != df["v"]].copy()  # remove self-loops
 
-    # canonical undirected representation
+    # canonical undirected representation (min, max)
     u_min = np.minimum(df["u"].values, df["v"].values)
     v_max = np.maximum(df["u"].values, df["v"].values)
     df["u"] = u_min
@@ -68,9 +77,11 @@ def load_edge_list(path: str):
     return df
 
 
-def build_splits(df_edges: pd.DataFrame,
-                 train_ratio: float = 0.8,
-                 val_ratio: float = 0.1):
+def build_splits(
+    df_edges: pd.DataFrame,
+    train_ratio: float = 0.8,
+    val_ratio: float = 0.1,
+):
     """
     Split edges into train/val/test sets.
     """
@@ -82,15 +93,17 @@ def build_splits(df_edges: pd.DataFrame,
     n_val = int(val_ratio * num_edges)
 
     df_train = df_edges.iloc[:n_train].reset_index(drop=True)
-    df_val = df_edges.iloc[n_train:n_train+n_val].reset_index(drop=True)
-    df_test = df_edges.iloc[n_train+n_val:].reset_index(drop=True)
+    df_val = df_edges.iloc[n_train:n_train + n_val].reset_index(drop=True)
+    df_test = df_edges.iloc[n_train + n_val:].reset_index(drop=True)
 
     return df_train, df_val, df_test
 
 
-def df_to_edge_index(df: pd.DataFrame,
-                     num_nodes: int,
-                     undirected: bool = True):
+def df_to_edge_index(
+    df: pd.DataFrame,
+    num_nodes: int,
+    undirected: bool = True,
+) -> torch.Tensor:
     """
     Convert dataframe of edges [u, v] to PyG edge_index tensor.
     """
@@ -98,31 +111,35 @@ def df_to_edge_index(df: pd.DataFrame,
     v = torch.tensor(df["v"].values, dtype=torch.long)
 
     if undirected:
-        edge_index = torch.stack([torch.cat([u, v]),
-                                  torch.cat([v, u])], dim=0)
+        edge_index = torch.stack(
+            [torch.cat([u, v]), torch.cat([v, u])],
+            dim=0,
+        )
     else:
         edge_index = torch.stack([u, v], dim=0)
 
     return edge_index
 
 
-def make_node_features(df_edges: pd.DataFrame, num_nodes: int):
+def make_node_features(df_edges: pd.DataFrame, num_nodes: int) -> torch.Tensor:
     """
     Node features = normalized degree of each node.
     """
     deg = np.zeros(num_nodes, dtype=float)
     for _, row in df_edges.iterrows():
-        deg[row["u"]] += 1
-        deg[row["v"]] += 1
+        deg[row["u"]] += 1.0
+        deg[row["v"]] += 1.0
 
     deg = (deg - deg.mean()) / (deg.std() + 1e-9)
     x = torch.tensor(deg[:, None], dtype=torch.float)  # shape [N, 1]
     return x
 
 
-def sample_negative_edges(edge_index_full: torch.Tensor,
-                          num_nodes: int,
-                          num_neg_samples: int):
+def sample_negative_edges(
+    edge_index_full: torch.Tensor,
+    num_nodes: int,
+    num_neg_samples: int,
+) -> torch.Tensor:
     """
     Negative sampling based on existing edges (collision-free).
     """
@@ -134,10 +151,14 @@ def sample_negative_edges(edge_index_full: torch.Tensor,
     )
 
 
-def get_edge_batches(pos_edge_index: torch.Tensor,
-                     neg_edge_index: torch.Tensor,
-                     device: torch.device):
-
+def get_edge_batches(
+    pos_edge_index: torch.Tensor,
+    neg_edge_index: torch.Tensor,
+    device: torch.device,
+):
+    """
+    Build tensors of (u, v, label) for positive and negative edges.
+    """
     pos_u, pos_v = pos_edge_index
     neg_u, neg_v = neg_edge_index
 
@@ -152,10 +173,13 @@ def get_edge_batches(pos_edge_index: torch.Tensor,
 
 
 def edge_predict(encoder, predictor, data, u, v):
-    z = encoder(data.x, data.edge_index)
+    """
+    Compute logits for edges (u, v) given encoder and predictor.
+    """
+    z = encoder(data.x, data.edge_index)  # [num_nodes, emb_dim]
     z_u = z[u]
     z_v = z[v]
-    return predictor(z_u, z_v)
+    return predictor(z_u, z_v)  # [num_edges]
 
 
 # =============================================================================
@@ -163,16 +187,23 @@ def edge_predict(encoder, predictor, data, u, v):
 # =============================================================================
 
 def train_one_epoch(
-    encoder, predictor, data,
-    pos_train_edge_index, neg_train_edge_index,
-    optimizer, criterion, device
+    encoder,
+    predictor,
+    data,
+    pos_train_edge_index,
+    neg_train_edge_index,
+    optimizer,
+    criterion,
+    device,
 ):
     encoder.train()
     predictor.train()
     optimizer.zero_grad()
 
     u_all, v_all, y_all = get_edge_batches(
-        pos_train_edge_index, neg_train_edge_index, device
+        pos_train_edge_index,
+        neg_train_edge_index,
+        device,
     )
 
     logits = edge_predict(encoder, predictor, data, u_all, v_all)
@@ -184,14 +215,20 @@ def train_one_epoch(
 
 @torch.no_grad()
 def evaluate(
-    encoder, predictor, data,
-    pos_edge_index, neg_edge_index, device
+    encoder,
+    predictor,
+    data,
+    pos_edge_index,
+    neg_edge_index,
+    device,
 ):
     encoder.eval()
     predictor.eval()
 
     u_all, v_all, y_all = get_edge_batches(
-        pos_edge_index, neg_edge_index, device
+        pos_edge_index,
+        neg_edge_index,
+        device,
     )
 
     logits = edge_predict(encoder, predictor, data, u_all, v_all)
@@ -210,12 +247,18 @@ def evaluate(
 def main():
     set_seed(SEED)
 
-    print("\nLoading dataset...")
+    ensure_dir(RESULTS_DIR)
+
+    print("\nLoading dataset from:", EDGE_LIST_FILE)
     df_edges = load_edge_list(EDGE_LIST_FILE)
     num_edges = len(df_edges)
     num_nodes = int(max(df_edges["u"].max(), df_edges["v"].max()) + 1)
 
-    df_train, df_val, df_test = build_splits(df_edges, TRAIN_RATIO, VAL_RATIO)
+    df_train, df_val, df_test = build_splits(
+        df_edges,
+        TRAIN_RATIO,
+        VAL_RATIO,
+    )
 
     print_graph_summary(
         num_nodes=num_nodes,
@@ -225,18 +268,35 @@ def main():
         num_test_edges=len(df_test),
     )
 
-    # Build edge_index tensors
-    pos_train_edge_index = df_to_edge_index(df_train, num_nodes, undirected=False)
-    pos_val_edge_index = df_to_edge_index(df_val, num_nodes, undirected=False)
-    pos_test_edge_index = df_to_edge_index(df_test, num_nodes, undirected=False)
+    # Optional: degree distribution plot
+    plot_degree_distribution(
+        df_edges=df_edges,
+        num_nodes=num_nodes,
+        save_path=DEGREE_PLOT_FILE,
+    )
+
+    # Positive edges for each split (directed format for predictor)
+    pos_train_edge_index = df_to_edge_index(
+        df_train, num_nodes, undirected=False
+    )
+    pos_val_edge_index = df_to_edge_index(
+        df_val, num_nodes, undirected=False
+    )
+    pos_test_edge_index = df_to_edge_index(
+        df_test, num_nodes, undirected=False
+    )
 
     # Full adjacency for negative sampling
-    full_edge_index = df_to_edge_index(df_edges, num_nodes, undirected=True)
+    full_edge_index = df_to_edge_index(
+        df_edges, num_nodes, undirected=True
+    )
 
-    # Only training graph is used by GNN
-    train_edge_index = df_to_edge_index(df_train, num_nodes, undirected=True)
+    # Only training graph is used by the GNN
+    train_edge_index = df_to_edge_index(
+        df_train, num_nodes, undirected=True
+    )
 
-    # Node features
+    # Node features (degree-based)
     x = make_node_features(df_edges, num_nodes)
     data = Data(x=x, edge_index=train_edge_index)
 
@@ -254,7 +314,10 @@ def main():
         dropout=DROPOUT,
     ).to(device)
 
-    predictor = LinkPredictor(emb_dim=EMB_DIM, hidden_dim=HIDDEN_PRED).to(device)
+    predictor = LinkPredictor(
+        emb_dim=EMB_DIM,
+        hidden_dim=HIDDEN_PRED,
+    ).to(device)
 
     optimizer = torch.optim.Adam(
         list(encoder.parameters()) + list(predictor.parameters()),
@@ -265,8 +328,16 @@ def main():
 
     # Pre-sample negatives for val/test
     print("Sampling fixed negative edges for validation and test...")
-    neg_val_edge_index = sample_negative_edges(full_edge_index, num_nodes, pos_val_edge_index.size(1))
-    neg_test_edge_index = sample_negative_edges(full_edge_index, num_nodes, pos_test_edge_index.size(1))
+    neg_val_edge_index = sample_negative_edges(
+        full_edge_index,
+        num_nodes,
+        pos_val_edge_index.size(1),
+    )
+    neg_test_edge_index = sample_negative_edges(
+        full_edge_index,
+        num_nodes,
+        pos_test_edge_index.size(1),
+    )
 
     best_val_auc = 0.0
     best_state = None
@@ -274,21 +345,31 @@ def main():
     print("\nStarting training...\n")
 
     for epoch in range(1, EPOCHS + 1):
-        # Fresh negative samples for training
-        neg_train_edge_index = sample_negative_edges(full_edge_index, num_nodes, pos_train_edge_index.size(1)).to(device)
+        # Fresh negative samples for training every epoch
+        neg_train_edge_index = sample_negative_edges(
+            full_edge_index,
+            num_nodes,
+            pos_train_edge_index.size(1),
+        ).to(device)
 
         loss = train_one_epoch(
-            encoder, predictor, data,
+            encoder,
+            predictor,
+            data,
             pos_train_edge_index.to(device),
             neg_train_edge_index,
-            optimizer, criterion, device
+            optimizer,
+            criterion,
+            device,
         )
 
         val_auc, val_ap = evaluate(
-            encoder, predictor, data,
+            encoder,
+            predictor,
+            data,
             pos_val_edge_index.to(device),
             neg_val_edge_index.to(device),
-            device
+            device,
         )
 
         if val_auc > best_val_auc:
@@ -298,7 +379,7 @@ def main():
                 "predictor": predictor.state_dict(),
             }
 
-        if epoch % 10 == 0 or epoch == 1:
+        if epoch % 10 == 0 or epoch == 1 or epoch == EPOCHS:
             print(
                 f"Epoch {epoch:03d} | "
                 f"Train Loss={loss:.4f} | "
@@ -306,37 +387,38 @@ def main():
                 f"Val AP={val_ap:.4f}"
             )
 
-    # Load best model
+    # Load best model based on validation AUC
     if best_state is not None:
         encoder.load_state_dict(best_state["encoder"])
         predictor.load_state_dict(best_state["predictor"])
 
-    # Final test
+    # Final test evaluation
     test_auc, test_ap = evaluate(
-        encoder, predictor, data,
+        encoder,
+        predictor,
+        data,
         pos_test_edge_index.to(device),
         neg_test_edge_index.to(device),
-        device
+        device,
     )
 
     print("\n=== FINAL TEST RESULTS ===")
     print(f"Test AUC: {test_auc:.4f}")
     print(f"Test AP:  {test_ap:.4f}")
 
-    # Save metrics
+    # Save metrics and model
     save_metrics(
-        "linkpred_metrics.json",
+        METRICS_FILE,
         {
             "test_auc": float(test_auc),
             "test_ap": float(test_ap),
             "encoder": ENCODER_NAME,
             "epochs": EPOCHS,
-        }
+        },
     )
 
-    # Save model
-    torch.save(best_state, "linkpred_gnn_best.pth")
-    print("\nSaved best model to linkpred_gnn_best.pth")
+    torch.save(best_state, MODEL_FILE)
+    print(f"\nSaved best model to {MODEL_FILE}")
 
 
 if __name__ == "__main__":
