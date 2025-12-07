@@ -1,0 +1,19 @@
+name: linkpred-gnn
+channels:
+  - pytorch
+  - pyg
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - numpy>=1.23
+  - pandas>=1.5
+  - scikit-learn>=1.1
+  - matplotlib>=3.6
+  - pytorch>=2.0
+  - pytorch-cuda=12.1    # se estiver em GPU NVIDIA; se for só CPU, pode remover esta linha
+  - pyg                   # PyTorch Geometric meta-package (conda-forge/pyg)
+  - pip
+  - pip:
+      - tqdm>=4.64
