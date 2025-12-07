@@ -1,61 +1,232 @@
-<img src="assets/ppgec.png" alt="drawing" width="200"/>
+<img src="assets/ppgec.png" alt="ppgec" width="200"/>
 
-## Identificação
-**Professor**: Diego Pinheiro, PhD
+# APS Citation Network: Structural Analysis and Citation Forecasting with Graph Neural Networks
 
-**Course**: Network Science
+## Identificacao
+Professor: Diego Pinheiro, PhD  
+Course: Network Science  
+Task: Final Project  
+Student: Ivna Valenca de Oliveira  
 
-**Task**: Final Project
-
-# APS Citation Network: Structure, Influence Dynamics, and Growth Mechanisms
+---
 
 ## Abstract
 
-### Background
-The APS Citation Network is a large-scale directed graph in which each node represents a scientific article and each edge A → B indicates that paper A cites paper B. Citation networks are classical examples of complex systems, showing scale-free degree distributions, hierarchical organization, and strong temporal dynamics. Their complexity makes them a central benchmark in Network Science for studying scientific impact, knowledge diffusion, and growth mechanisms.
+This project investigates the APS Citation Network, a large-scale directed network composed of scientific articles published across APS journals and their citation relationships. The first part of this work focuses on structural network analysis, including degree distributions, centrality measures, community detection, and evidence of preferential attachment.
 
-### Objectives
-This project aims to analyze the structural properties and temporal evolution of the APS Citation Network. The primary goal is to identify the mechanisms of influence accumulation and community formation. A secondary objective is to evaluate whether preferential attachment and aging processes explain the observed citation patterns. The hypothesis is that scientific influence in the APS corpus emerges from cumulative advantage dynamics, resulting in highly skewed in-degree distributions and hierarchical research clusters.
-
-### Methods
-Each node corresponds to an APS paper, and each directed edge corresponds to a citation link. Preprocessing ensures chronological consistency and isolates the largest connected components. Structural metrics—such as in-degree, out-degree, PageRank, and HITS authority scores—will be computed, along with directed clustering and modularity. Temporal analysis includes citation growth curves, preferential attachment fitting, and aging models. Directed community detection (Louvain, Infomap) will be used to uncover scientific subfields and their interactions over time.
-
-### Results
-Expected outcomes include the identification of influential papers that act as hubs within the citation structure and the detection of research communities aligned with thematic areas of physics. The in-degree distribution is expected to follow a heavy-tailed pattern consistent with scale-free networks. Preliminary analyses should reveal that citation accumulation aligns with preferential attachment coupled with aging effects. Temporal snapshots are expected to show the emergence, evolution, and decline of scientific subfields.
-
-### Conclusions
-The APS Citation Network provides a robust environment for understanding scientific influence and the propagation of knowledge. Combining directed structural analysis with temporal modeling enables insights into how research fields evolve and how scientific impact accumulates. Future extensions may include multilayer analyses linking citations, co-authorship, and textual similarity for a more comprehensive view of scientific ecosystems.
-
-### Keywords
-Citation Networks; Network Science; Directed Graphs; Preferential Attachment; Scientific Influence; APS Journals; Knowledge Diffusion
+The second part extends the analysis by introducing a Regression Graph Neural Network (GNN) designed to predict future citation counts of scientific articles, using graph structure and temporal node features. The model is trained on a historical cutoff of the APS dataset and evaluated on future citation windows, enabling insights into how network topology contributes to scientific impact forecasting.
 
 ---
 
-## Acknowledgments
-I thank Professor Diego Pinheiro for the opportunity to go beyond the expected scope of the project, encouraging deeper exploration, critical thinking, and academic growth. His guidance and openness to innovative approaches made this work possible.
+# 1. Dataset Description
 
-## References
-[1] A.-L. Barabási, *Network Science*. Cambridge: Cambridge University Press, 2016.
+The dataset originates from the American Physical Society (APS) and contains:
 
-[2] M. E. J. Newman, *Networks: An Introduction*. Oxford: Oxford University Press, 2010.
+- Nodes: scientific papers  
+- Directed edges: A -> B if paper A cites paper B  
+- Temporal metadata: year of publication  
+- Scale:  
+  - More than 100,000 papers  
+  - More than 1,000,000 citations  
+  - Over one century of publications  
 
-[3] S. Redner, “Citation Statistics from More Than a Century of Physical Review,” *arXiv preprint*, physics/0407137, 2004.
+Key properties:
 
-[4] R. Albert and A.-L. Barabási, “Statistical mechanics of complex networks,” *Reviews of Modern Physics*, vol. 74, pp. 47–97, 2002.
-
-### Keywords
-Network Science; Graph Neural Networks; Streamflow; Spatio-Temporal Forecasting; Extreme Events; Hydrology
+- Directed acyclic behavior due to chronological constraints  
+- Highly heterogeneous degree distribution (power law)  
+- Strong modular structure reflecting scientific subfields  
 
 ---
 
-## Acknowledgments
-Thank the individuals, organizations, or funding bodies that supported the research.
+# 2. Structural Network Analysis
 
-## References
-[1] A.-L. Barabási, Network Science. Cambridge: Cambridge University Press, 2016.
+## 2.1 Preprocessing
 
-[2] M. E. J. Newman, Networks: An Introduction. Oxford: Oxford University Press, 2010.
+- Removal of duplicate entries  
+- Temporal consistency validation  
+- Extraction of the largest weakly connected component (WCC)  
+- Construction of decade-based subgraphs  
+- Normalization of metadata  
 
-[3] J. F. Donges, Y. Zou, N. Marwan, and J. Kurths, “Complex networks in climate dynamics,” Eur. Phys. J. Spec. Top., vol. 174, no. 1, pp. 157–179, 2009.
+## 2.2 Structural Metrics
 
-[4] J. Zhang, Q. Sun, Y. Lu, and T. Yang, “Correlation networks in hydrology: A new perspective for extreme events analysis,” Water Resour. Res., vol. 55, no. 1, pp. 1–15, 2019.
+- In-degree and out-degree distributions  
+- PageRank, Betweenness Centrality, HITS, Katz Centrality  
+- Density and effective diameter  
+- Connected components (WCC and SCC)  
+
+## 2.3 Community Detection
+
+Two algorithms were applied:
+
+- Louvain: modularity optimization  
+- Infomap: flow-based community detection, suitable for directed graphs  
+
+Identified major scientific communities:
+
+- Particle Physics  
+- Condensed Matter  
+- Optics and Photonics  
+- Nuclear Physics  
+- Statistical and Thermal Physics  
+
+## 2.4 Preferential Attachment
+
+Evidence indicates that highly cited papers tend to accumulate new citations at higher rates, consistent with Barabasi-Albert growth with aging.
+
+---
+
+# 3. Citation Forecasting with Graph Neural Networks
+
+This section describes the predictive modeling component.
+
+## 3.1 Objective
+
+Given a cutoff year Y_cut, train a GNN that predicts how many new citations each paper will receive in the following Delta_t years.
+
+## 3.2 Task Definition
+
+Input graph: All papers published on or before Y_cut and all citation edges dated on or before Y_cut.
+
+Node features include:
+
+- Normalized publication year  
+- Citations accumulated until Y_cut  
+- Centrality values (e.g., PageRank)  
+- Optional journal or subfield embeddings  
+
+Target variable:
+
+Number of citations received between  
+Y_cut + 1 and Y_cut + Delta_t.
+
+## 3.3 Model Architecture
+
+A Regression GNN (GCN or GraphSAGE) is used.  
+Basic structure:
+
+- GNN layer  
+- ReLU  
+- GNN layer  
+- ReLU  
+- Linear layer for regression output  
+
+Training setup:
+
+- Loss: Mean Squared Error (MSE)  
+- Metrics: Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE)  
+- Split: temporal split (train-older papers, validation-middle, test-recent)  
+- Framework: PyTorch Geometric  
+
+## 3.4 Implementation Structure
+
+The GNN code is organized as follows:
+
+/gnn/
+train_regression_gnn.py
+models.py
+utils.py
+
+
+---
+
+# 4. Results
+
+## 4.1 Structural Analysis Results
+
+- In-degree distribution follows a power law  
+- PageRank and HITS identify highly influential papers  
+- WCC contains more than 90 percent of all papers  
+- Infomap communities align with scientific subfields  
+
+## 4.2 GNN Forecasting Results
+
+(Replace placeholder values with real metrics when available.)
+
+Example table:
+
+| Metric    | Value |
+|-----------|-------|
+| Test MAE  | X.XX  |
+| Test RMSE | X.XX  |
+
+Observations:
+
+- Articles with stable citation history are easier to predict  
+- Very old or disruptive papers show higher error variance  
+- Structural features improve prediction compared to simple baselines  
+
+---
+
+# 5. Repository Structure
+
+project/
+data/
+nodes.csv
+edges.csv
+
+analysis/
+    structural_analysis.ipynb
+    community_detection.ipynb
+    preferential_attachment.ipynb
+
+gnn/
+    train_regression_gnn.py
+    models.py
+    utils.py
+
+README.md
+requirements.txt
+
+---
+
+# 6. Installation and Dependencies
+
+## 6.1 Create environment
+
+python3 -m venv venv
+source venv/bin/activate
+
+## 6.2 Install dependencies
+
+pip install -r requirements.txt
+
+
+Core libraries:
+
+- NetworkX  
+- Pandas  
+- Matplotlib  
+- PyTorch  
+- PyTorch Geometric  
+
+---
+
+# 7. Running the GNN Model
+
+cd gnn
+python train_regression_gnn.py
+
+
+This script produces:
+
+- Training and validation losses  
+- Test metrics  
+- Saved model weights  
+
+---
+
+# 8. Acknowledgments
+
+I thank Professor Diego Pinheiro for the opportunity to go beyond structural analysis and explore predictive modeling with Graph Neural Networks.
+
+---
+
+# 9. References
+
+Barabasi, A.-L., Network Science, 2016.  
+Newman, M. E. J., Networks: An Introduction, 2010.  
+Redner, S., Citation Statistics from More Than a Century of Physical Review, 2004.  
+Rosvall, M., Bergstrom, C. T., Maps of random walks..., PNAS 2008.  
+Blondel et al., Fast unfolding of communities..., 2008.  
+APS Dataset: https://journals.aps.org/datasets
