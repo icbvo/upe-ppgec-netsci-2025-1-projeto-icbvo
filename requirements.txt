@@ -1,1 +1,22 @@
-ipykernel
+# Core
+numpy
+pandas
+scipy
+
+# Grafos
+networkx
+
+# Visualizacao
+matplotlib
+
+# Deep Learning
+torch
+torchvision
+torchaudio
+
+# Graph Neural Networks
+torch-geometric
+
+# Outros opcionais (pode remover se nao usar)
+scikit-learn
+tqdm
