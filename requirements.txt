@@ -19,3 +19,6 @@ tqdm>=4.64
 # json
 # os
 # random
+
+networkx>=3.0
+
