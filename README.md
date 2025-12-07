@@ -1,4 +1,3 @@
-
 <img src="assets/ppgec.png" alt="drawing" width="200"/>
 
 ## Identificação
@@ -8,24 +7,41 @@
 
 **Task**: Final Project
 
-# Streamflow Correlation Networks and Graph Neural Networks for Extreme Event Prediction
+# APS Citation Network: Structure, Influence Dynamics, and Growth Mechanisms
 
 ## Abstract
 
 ### Background
-Streamflow is a critical variable in hydrology, reflecting the integrated behavior of river basins. Network Science has been widely applied to uncover structural patterns in climate and hydrological systems [1], [2]. Traditional correlation networks allow the identification of synchronous behaviors among river gauge stations [3], [4]. However, recent advances in Graph Neural Networks (GNNs) provide opportunities to move beyond descriptive analysis, enabling predictive modeling directly on network structures.
+The APS Citation Network is a large-scale directed graph in which each node represents a scientific article and each edge A → B indicates that paper A cites paper B. Citation networks are classical examples of complex systems, showing scale-free degree distributions, hierarchical organization, and strong temporal dynamics. Their complexity makes them a central benchmark in Network Science for studying scientific impact, knowledge diffusion, and growth mechanisms.
 
 ### Objectives
-This research aims to construct correlation networks from streamflow time series and extend their use with Graph Neural Networks. The primary goal is to detect patterns in network topology associated with extreme hydrological events. A secondary objective is to forecast streamflow values at selected stations by integrating spatial and temporal dependencies through GNN-based models. The hypothesis is that GNNs outperform traditional time-series models by leveraging both graph connectivity and sequential information.
+This project aims to analyze the structural properties and temporal evolution of the APS Citation Network. The primary goal is to identify the mechanisms of influence accumulation and community formation. A secondary objective is to evaluate whether preferential attachment and aging processes explain the observed citation patterns. The hypothesis is that scientific influence in the APS corpus emerges from cumulative advantage dynamics, resulting in highly skewed in-degree distributions and hierarchical research clusters.
 
 ### Methods
-Historical streamflow data will be collected from fluviometric stations. Nodes represent stations, and edges are weighted by correlation coefficients. Network metrics such as degree, centrality, and modularity will be computed for structural analysis. For predictive modeling, node features include normalized time-series segments, and edges incorporate correlation and spatial proximity. Graph Convolutional Networks (GCN), Graph Attention Networks (GAT), and Spatio-Temporal GNNs (e.g., T-GCN, DCRNN) will be implemented. Model performance will be evaluated using metrics such as RMSE and MAE against baseline statistical and deep learning models.
+Each node corresponds to an APS paper, and each directed edge corresponds to a citation link. Preprocessing ensures chronological consistency and isolates the largest connected components. Structural metrics—such as in-degree, out-degree, PageRank, and HITS authority scores—will be computed, along with directed clustering and modularity. Temporal analysis includes citation growth curves, preferential attachment fitting, and aging models. Directed community detection (Louvain, Infomap) will be used to uncover scientific subfields and their interactions over time.
 
 ### Results
-Expected outcomes include the identification of communities of stations with synchronized dynamics and the detection of critical nodes under extreme flow conditions. Preliminary results are anticipated to show improved forecasting accuracy using GNNs compared to traditional LSTM or ARIMA models. These results may highlight the capacity of GNNs to capture both structural and temporal patterns in hydrological networks.
+Expected outcomes include the identification of influential papers that act as hubs within the citation structure and the detection of research communities aligned with thematic areas of physics. The in-degree distribution is expected to follow a heavy-tailed pattern consistent with scale-free networks. Preliminary analyses should reveal that citation accumulation aligns with preferential attachment coupled with aging effects. Temporal snapshots are expected to show the emergence, evolution, and decline of scientific subfields.
 
 ### Conclusions
-The integration of Network Science with Graph Neural Networks enables both structural analysis and predictive modeling of hydrological systems. This approach has the potential to improve early detection of extreme events and contribute to decision-making in water resources management. Future work will extend the framework by incorporating additional hydroclimatic variables, such as precipitation and temperature.
+The APS Citation Network provides a robust environment for understanding scientific influence and the propagation of knowledge. Combining directed structural analysis with temporal modeling enables insights into how research fields evolve and how scientific impact accumulates. Future extensions may include multilayer analyses linking citations, co-authorship, and textual similarity for a more comprehensive view of scientific ecosystems.
+
+### Keywords
+Citation Networks; Network Science; Directed Graphs; Preferential Attachment; Scientific Influence; APS Journals; Knowledge Diffusion
+
+---
+
+## Acknowledgments
+I thank Professor Diego Pinheiro for the opportunity to go beyond the expected scope of the project, encouraging deeper exploration, critical thinking, and academic growth. His guidance and openness to innovative approaches made this work possible.
+
+## References
+[1] A.-L. Barabási, *Network Science*. Cambridge: Cambridge University Press, 2016.
+
+[2] M. E. J. Newman, *Networks: An Introduction*. Oxford: Oxford University Press, 2010.
+
+[3] S. Redner, “Citation Statistics from More Than a Century of Physical Review,” *arXiv preprint*, physics/0407137, 2004.
+
+[4] R. Albert and A.-L. Barabási, “Statistical mechanics of complex networks,” *Reviews of Modern Physics*, vol. 74, pp. 47–97, 2002.
 
 ### Keywords
 Network Science; Graph Neural Networks; Streamflow; Spatio-Temporal Forecasting; Extreme Events; Hydrology
