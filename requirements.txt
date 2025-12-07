@@ -1,22 +1,21 @@
-# Core
-numpy
-pandas
-scipy
+# Core scientific stack
+numpy>=1.23
+pandas>=1.5
+scikit-learn>=1.1
 
-# Grafos
-networkx
+# Deep learning framework (CPU or GPU version will be resolved automatically)
+torch>=2.0
 
-# Visualizacao
-matplotlib
+# Graph neural network library
+torch-geometric>=2.3
 
-# Deep Learning
-torch
-torchvision
-torchaudio
+# Visualization
+matplotlib>=3.6
 
-# Graph Neural Networks
-torch-geometric
+# Optional, but useful for experiments and debugging
+tqdm>=4.64
 
-# Outros opcionais (pode remover se nao usar)
-scikit-learn
-tqdm
+# For JSON, logs, and general utilities (standard libs — included automatically)
+# json
+# os
+# random
