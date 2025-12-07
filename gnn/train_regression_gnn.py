@@ -6,7 +6,6 @@
 
 import os
 import math
-import random
 import numpy as np
 import pandas as pd
 import torch
@@ -16,12 +15,14 @@ from torch_geometric.utils import from_scipy_sparse_matrix
 from scipy.sparse import coo_matrix
 
 from models import get_model
+from utils import set_seed, print_data_summary, save_metrics
 
 
 # ==========================
 # CONFIGURACOES GERAIS
 # ==========================
 
+# Diretoria dos dados (ajuste se necessario)
 DATA_DIR = "../data"
 NODES_CSV = os.path.join(DATA_DIR, "nodes.csv")
 EDGES_CSV = os.path.join(DATA_DIR, "edges.csv")
@@ -53,13 +54,6 @@ SEED = 42
 # FUNCOES AUXILIARES
 # ==========================
 
-def set_seed(seed: int = 42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-
 def load_data(nodes_csv: str, edges_csv: str):
     """
     Carrega os dados de nos e arestas a partir de arquivos CSV.
@@ -75,10 +69,10 @@ def load_data(nodes_csv: str, edges_csv: str):
 def build_temporal_graph(nodes: pd.DataFrame, edges: pd.DataFrame,
                          y_cut: int, delta_t: int) -> Data:
     """
-    Construi o grafo dirigido em Y_cut e gera:
-    - features de nos (X)
+    Constroi o grafo dirigido em Y_cut e gera:
+    - features de nos (x)
     - alvo (y) = numero de citacoes futuras entre (Y_cut, Y_cut + delta_t]
-    - masks de treino, validacao, teste baseadas no ano de publicacao
+    - masks de treino, validacao e teste baseadas no ano de publicacao.
     """
 
     # Filtra nos ate o ano de corte
@@ -88,6 +82,9 @@ def build_temporal_graph(nodes: pd.DataFrame, edges: pd.DataFrame,
     id2idx = {pid: i for i, pid in enumerate(nodes_cut[COL_PAPER_ID])}
     num_nodes = len(nodes_cut)
 
+    if num_nodes == 0:
+        raise ValueError("Nao ha nos apos aplicar o filtro de ano. Verifique COL_YEAR e Y_CUT.")
+
     # Filtra arestas ate o ano de corte
     edges_cut = edges[
         (edges[COL_CITING].isin(id2idx)) &
@@ -95,34 +92,34 @@ def build_temporal_graph(nodes: pd.DataFrame, edges: pd.DataFrame,
         (edges[COL_YEAR_CITING] <= y_cut)
     ].copy()
 
-    # Monta matriz esparsa de adjacencia (para poder usar from_scipy_sparse_matrix se quiser)
     src_idx = edges_cut[COL_CITING].map(id2idx).to_numpy()
     dst_idx = edges_cut[COL_CITED].map(id2idx).to_numpy()
 
     if len(src_idx) == 0:
         raise ValueError("Nao ha arestas apos o filtro de corte temporal. Verifique o dataset ou as colunas de ano.")
 
-    # Grafo direcionado: usamos adjacency simples para PyG
+    # Monta matriz esparsa de adjacencia (direcionada)
     data_adj = np.ones_like(src_idx, dtype=np.float32)
     adj = coo_matrix((data_adj, (src_idx, dst_idx)), shape=(num_nodes, num_nodes))
+
     edge_index, _ = from_scipy_sparse_matrix(adj)  # [2, num_edges]
 
-    # Construir features de nos (X)
+    # -------- Features de nos (x) --------
     years = nodes_cut[COL_YEAR].to_numpy().astype(float)
     year_norm = (years - years.min()) / (years.max() - years.min() + 1e-9)
 
-    # In-degree ate Y_cut
+    # In-degree ate Y_CUT
     in_deg = np.zeros(num_nodes, dtype=float)
     for d in dst_idx:
         in_deg[d] += 1.0
     in_deg_norm = (in_deg - in_deg.mean()) / (in_deg.std() + 1e-9)
 
     # Aqui apenas 2 features: ano normalizado e in_degree normalizado
-    # Voce pode adicionar outras (PageRank, area, etc.)
+    # Voce pode adicionar outras (PageRank, area, etc.) se tiver.
     X = np.stack([year_norm, in_deg_norm], axis=1)
     x = torch.tensor(X, dtype=torch.float)
 
-    # Construir o alvo y = citacoes futuras
+    # -------- Alvo (y) = citacoes futuras --------
     future_edges = edges[
         (edges[COL_CITED].isin(id2idx)) &
         (edges[COL_YEAR_CITING] > y_cut) &
@@ -136,20 +133,20 @@ def build_temporal_graph(nodes: pd.DataFrame, edges: pd.DataFrame,
 
     y = torch.tensor(y_arr, dtype=torch.float)
 
-    # Masks temporais: treino, valid, teste
+    # -------- Masks temporais --------
     years_tensor = torch.tensor(years, dtype=torch.long)
 
     # Exemplo de split temporal simples:
     # treino: anos <= y_cut - 10
-    # valid:  (y_cut - 10, y_cut - 5]
-    # teste:  anos > y_cut - 5
+    # valid: (y_cut - 10, y_cut - 5]
+    # teste: anos > y_cut - 5
     train_mask = years_tensor <= (y_cut - 10)
     val_mask = (years_tensor > (y_cut - 10)) & (years_tensor <= (y_cut - 5))
     test_mask = years_tensor > (y_cut - 5)
 
-    # Se algum mask ficar vazio, ajuste a logica conforme sua distribuicao temporal
     if train_mask.sum() == 0 or val_mask.sum() == 0 or test_mask.sum() == 0:
-        print("Aviso: alguma das masks (treino/valid/teste) esta vazia. Verifique Y_CUT e a distribuicao de anos.")
+        print("Aviso: alguma das masks (treino/valid/teste) esta vazia. "
+              "Considere ajustar Y_CUT, DELTA_T ou as regras de split.")
 
     data = Data(x=x, edge_index=edge_index, y=y)
     data.train_mask = train_mask
@@ -196,12 +193,7 @@ def main():
     print("Construindo grafo temporal...")
     data = build_temporal_graph(nodes, edges, Y_CUT, DELTA_T)
 
-    print("Numero de nos:", data.num_nodes)
-    print("Numero de arestas:", data.num_edges)
-    print("Features por no:", data.num_node_features)
-    print("Nos treino:", int(data.train_mask.sum()))
-    print("Nos validacao:", int(data.val_mask.sum()))
-    print("Nos teste:", int(data.test_mask.sum()))
+    print_data_summary(data)
 
     print("Instanciando modelo:", MODEL_NAME)
     model = get_model(
@@ -243,7 +235,7 @@ def main():
                 f"val_RMSE={val_rmse:.4f}"
             )
 
-    # Avaliar no conjunto de teste usando o melhor modelo de validacao
+    # Avaliar no conjunto de teste usando o melhor modelo validado
     if best_state_dict is not None:
         model.load_state_dict(best_state_dict)
 
@@ -253,12 +245,23 @@ def main():
     print(f"Test MAE:  {test_mae:.4f}")
     print(f"Test RMSE: {test_rmse:.4f}")
 
-    # Opcional: salvar pesos do modelo
-    out_path = "gnn_regressor_best.pth"
-    torch.save(model.state_dict(), out_path)
-    print(f"Modelo salvo em: {out_path}")
+    # Salvar pesos do modelo
+    model_path = "gnn_regressor_best.pth"
+    torch.save(model.state_dict(), model_path)
+    print(f"Modelo salvo em: {model_path}")
+
+    # Salvar metricas em JSON para usar no artigo/README
+    metrics = {
+        "test_mse": float(test_mse),
+        "test_mae": float(test_mae),
+        "test_rmse": float(test_rmse),
+        "y_cut": int(Y_CUT),
+        "delta_t": int(DELTA_T),
+        "model": MODEL_NAME,
+    }
+    metrics_path = "gnn_regression_metrics.json"
+    save_metrics(metrics_path, metrics)
 
 
 if __name__ == "__main__":
     main()
-
