@@ -9,7 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_DEFAULT_TIMEOUT=100
+    PIP_DEFAULT_TIMEOUT=100 \
+    PYTHONPATH=/workspace
 
 # 3) Instalar dependências de sistema mínimas
 #    (compilador, git e libs úteis para algumas wheels)
@@ -42,4 +43,4 @@ EXPOSE 8888
 
 # 10) Comando padrão:
 #     - Sobe um Jupyter Lab apontando para /workspace
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.token=", "--notebook-dir=/workspace"]
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.token=", "--notebook-dir=/workspace", "--allow-root"]
