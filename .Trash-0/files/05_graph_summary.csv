@@ -1,0 +1,2 @@
+num_nodes,num_edges,density,is_connected,num_components,lcc_size,lcc_fraction,lcc_num_nodes,lcc_num_edges,lcc_density,lcc_avg_degree,lcc_avg_shortest_path,lcc_diameter,lcc_degree_assortativity,lcc_avg_clustering
+23133,93439,0.00034923119987489135,False,567,21363,0.9234859291920633,21363,91286,0.0004000645057231869,8.546177971258718,5.352153417563728,15,0.12528250398545906,0.6417316374785165

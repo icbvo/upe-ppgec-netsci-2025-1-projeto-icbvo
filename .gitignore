@@ -1,64 +1,95 @@
-# ============================
-# Python
-# ============================
+# =====================================
+# PYTHON
+# =====================================
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.so
+*.pyd
+*.pyo
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# ============================
-# Jupyter Notebook
-# ============================
+# Byte-compiled
+*.egg-info/
+*.egg
+dist/
+build/
+
+# =====================================
+# JUPYTER NOTEBOOK
+# =====================================
 .ipynb_checkpoints/
+.notebook_cache/
+*.nbconvert/
 
-# ============================
-# Data files (hidrológicos, pesados, temporários)
-# ============================
+# =====================================
+# DATA FILES (raw, heavy, sensitive)
+# Apenas mantenha .gitkeep para estruturar pastas vazias
+# =====================================
 data/*
-!data/.gitkeep   # mantém a pasta vazia no repositório
+!data/.gitkeep
 
-# ============================
-# Logs
-# ============================
+# =====================================
+# RESULTS (arquivos grandes, imagens geradas, outputs)
+# Apenas mantenha .gitkeep
+# =====================================
+results/*
+!results/.gitkeep
+
+# Evitar salvar figuras grandes / artefatos
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+
+# =====================================
+# LOGS
+# =====================================
 *.log
 
-# ============================
-# IDEs / configs locais
-# ============================
-.vscode/
-.idea/
-
-# ============================
-# Cache
-# ============================
-*.cache
-*.mypy_cache/
-*.pytest_cache/
-
-# ============================
-# Results / outputs temporários
-# ============================
-*.csv
-*.xlsx
-*.hdf5
-*.parquet
-*.nc
-
-# ============================
-# Modelos grandes (deep learning)
-# ============================
+# =====================================
+# MODELS (pesados)
+# =====================================
 *.pt
 *.pth
 *.h5
+*.onnx
 
-# ============================
-# Sistema
-# ============================
+# =====================================
+# TEMP / CACHE
+# =====================================
+*.cache
+*.mypy_cache/
+*.pytest_cache/
+*.coverage
+*.tmp
+tmp/
+.cache/
+
+# =====================================
+# EDITORS & LOCAL CONFIGS
+# =====================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# DevContainer local state
+.devcontainer/*local*
+.devcontainer/*backup*
+
+# =====================================
+# OPERATING SYSTEM
+# =====================================
 .DS_Store
 Thumbs.db
+
+# =====================================
+# ENVIRONMENT / CONFIG PRIVATE
+# =====================================
+.env
+.env.*
