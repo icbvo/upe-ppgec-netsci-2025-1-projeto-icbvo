@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  gnn:
+    build: .
+    container_name: gnn-linkpred
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/workspace
+    command: >
+      jupyter lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --NotebookApp.token=''
+      --NotebookApp.password=''
